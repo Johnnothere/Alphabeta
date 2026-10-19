@@ -1,0 +1,4 @@
+Contact: mailto:security@alphabeta.dev
+Expires: 2027-12-31T23:59:59.000Z
+Preferred-Languages: en
+Policy: Found something? Tell us. Builders who report responsibly get thanked in public.

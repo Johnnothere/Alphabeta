@@ -1,0 +1,12 @@
+/* TEAM */
+  Built by: the alphabeta community
+  Motto: build. ship. help others ship.
+
+/* SITE */
+  Stack: TypeScript, React, TanStack Start
+  Fonts: Geist, JetBrains Mono
+  Standards: HTML5, CSS3
+
+/* PS */
+  You read humans.txt. You're our kind of person.
+  Press / on the homepage.

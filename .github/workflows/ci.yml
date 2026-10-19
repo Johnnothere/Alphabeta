@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+      # npm 10 (bundled with Node 22) crashes in arborist's peer resolution on
+      # vitest 4's optional-peer set — "Cannot read properties of null
+      # (reading 'edgesOut')". npm 11 resolves it; the version is pinned by
+      # `packageManager` in package.json.
+      - run: corepack enable npm && corepack prepare npm@11.21.1 --activate
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          # The browser bundle needs these at build time. They are the
+          # publishable key and a public URL, so they are safe as repo
+          # variables; the service-role key is never needed to build.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://example.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || 'build-placeholder' }}
+          VITE_SITE_URL: ${{ vars.VITE_SITE_URL || 'https://alphabeta.example' }}
+          VITE_BUILD_SHA: ${{ github.sha }}
