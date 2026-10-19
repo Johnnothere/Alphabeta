@@ -57,8 +57,8 @@ describe("clientIp", () => {
   });
 
   it("treats a malformed hop count as one hop", async () => {
-    await expect(loadClientIp("nonsense", { "x-forwarded-for": "1.1.1.1, 203.0.113.9" })).resolves.toBe(
-      "203.0.113.9",
-    );
+    await expect(
+      loadClientIp("nonsense", { "x-forwarded-for": "1.1.1.1, 203.0.113.9" }),
+    ).resolves.toBe("203.0.113.9");
   });
 });

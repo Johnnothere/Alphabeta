@@ -61,18 +61,30 @@ npm run db:types              # regenerate src/integrations/supabase/types.ts
 
 ## Deploying
 
-### 1. Supabase
+### 1. Supabase — already done
 
-**Create a new project.** Do not point this at the old Lovable project. The
-schema has changed (new tables, new functions, tightened grants), and
-`supabase db push` against a database that already has the old schema will try
-to re-run migrations that are partly applied. Starting clean avoids a
-half-migrated production database.
+Project **Alphabeta** (`flrjcieggmooekkwgeqs`, London / eu-west-2) exists and
+all seven migrations are applied. Nothing to run.
+
+To work against it locally:
 
 ```bash
-supabase link --project-ref <your-project-ref>
-supabase db push
+supabase link --project-ref flrjcieggmooekkwgeqs
+supabase migration list     # should show all seven as applied both sides
 ```
+
+> **A Supabase-specific trap, already fixed here.** Supabase ships
+> `alter default privileges in schema public grant all on tables/functions to
+> anon, authenticated`. That grant lands on every new object directly, so a
+> `revoke execute ... from public` in a migration does not remove it — PUBLIC
+> and `anon` are different grantees. Tables were mostly covered by RLS, but
+> functions have no RLS, so every `security definer` function was callable by
+> anonymous users over the REST API — including `redeem_code`, which grants
+> roles and trusts its arguments. `20261019143517_harden_default_privileges.sql`
+> revokes everything and re-grants only what each role needs. A plain Postgres
+> instance has no such default privileges, so this cannot be caught locally —
+> run `get_advisors` (or the dashboard's Security Advisor) after any migration
+> that adds a function.
 
 Then, in the dashboard:
 

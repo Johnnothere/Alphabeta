@@ -515,9 +515,6 @@ export type Database = {
           vouches: number;
         }[];
       };
-      dearmor: { Args: { "": string }; Returns: string };
-      gen_random_uuid: { Args: Record<PropertyKey, never>; Returns: string };
-      gen_salt: { Args: { "": string }; Returns: string };
       has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"]; _user_id: string };
         Returns: boolean;
@@ -525,7 +522,6 @@ export type Database = {
       is_meetup_eligible: { Args: { _uid: string }; Returns: boolean };
       is_member: { Args: { _user_id: string }; Returns: boolean };
       member_progress: { Args: { _uid: string }; Returns: Json };
-      pgp_armor_headers: { Args: { "": string }; Returns: Record<string, unknown>[] };
       prune_access_tickets: { Args: Record<PropertyKey, never>; Returns: undefined };
       prune_code_attempts: { Args: Record<PropertyKey, never>; Returns: undefined };
       prune_join_attempts: { Args: Record<PropertyKey, never>; Returns: undefined };

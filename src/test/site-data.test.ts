@@ -1,10 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const rpc = vi.fn();
-vi.mock("@/integrations/supabase/client", () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a) } }));
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: { rpc: (...a: unknown[]) => rpc(...a) },
+}));
 
 const { siteDataQuery } = await import("@/lib/site-data");
-const run = () => (siteDataQuery.queryFn as () => Promise<ReturnType<never>>)();
+const { EMPTY_SITE_DATA } = await import("@/lib/site-data");
+type SiteData = typeof EMPTY_SITE_DATA;
+const run = () => (siteDataQuery.queryFn as unknown as () => Promise<SiteData>)();
 
 beforeEach(() => rpc.mockReset());
 
@@ -16,7 +20,11 @@ beforeEach(() => rpc.mockReset());
 describe("site data", () => {
   it("drops tiles for numbers the community has not published", async () => {
     rpc.mockResolvedValue({
-      data: { stats: { members: null, ships_this_year: null, people_helped: null, pitch_decks: 0 }, ships: [], contributions: {} },
+      data: {
+        stats: { members: null, ships_this_year: null, people_helped: null, pitch_decks: 0 },
+        ships: [],
+        contributions: {},
+      },
       error: null,
     });
     const d = await run();
@@ -26,7 +34,11 @@ describe("site data", () => {
 
   it("keeps published numbers in display order", async () => {
     rpc.mockResolvedValue({
-      data: { stats: { members: 48, ships_this_year: 23, people_helped: 61, pitch_decks: 0 }, ships: [], contributions: {} },
+      data: {
+        stats: { members: 48, ships_this_year: 23, people_helped: 61, pitch_decks: 0 },
+        ships: [],
+        contributions: {},
+      },
       error: null,
     });
     const d = await run();
