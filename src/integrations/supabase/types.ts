@@ -526,6 +526,14 @@ export type Database = {
       prune_code_attempts: { Args: Record<PropertyKey, never>; Returns: undefined };
       prune_join_attempts: { Args: Record<PropertyKey, never>; Returns: undefined };
       public_site_data: { Args: Record<PropertyKey, never>; Returns: Json };
+      record_code_attempt: {
+        Args: { _ip: string; _window_minutes: number; _max: number };
+        Returns: boolean;
+      };
+      record_join_attempt: {
+        Args: { _ip: string; _window_minutes: number; _max: number };
+        Returns: boolean;
+      };
       redeem_code: {
         Args: { _code_id: string; _user_id: string };
         Returns: Database["public"]["Enums"]["app_role"];

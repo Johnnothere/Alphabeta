@@ -39,6 +39,13 @@ function VaultLayout() {
   const tried = useRef(false);
 
   async function tryRedeem(payload: { code?: string; ticket?: string }) {
+    if (payload.code !== undefined) {
+      const len = payload.code.trim().length;
+      if (len < 4 || len > 64) {
+        setMsg("Sorry, try again.");
+        return;
+      }
+    }
     setMsg("verifying…");
     try {
       const r = await redeem({ data: payload });
@@ -110,6 +117,8 @@ function VaultLayout() {
             <input
               id="vault-code"
               type="password"
+              autoComplete="one-time-code"
+              spellCheck={false}
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="passphrase"

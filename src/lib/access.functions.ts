@@ -16,6 +16,49 @@ async function sha256(code: string) {
 const WINDOW_MINUTES = 15;
 const MAX_TRIES = 8;
 
+type AdminClient = Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
+
+/**
+ * Counts and records one attempt for an IP, atomically, via the locked SQL
+ * function. Returns whether the attempt is within the limit.
+ *
+ * Fails closed if the limiter errors — with one exception: if the function
+ * does not exist yet (the migration that adds it has not been applied to this
+ * database), fall back to the older count-then-insert sequence so a deploy
+ * that lands before its migration still works. That path is racy under a
+ * burst, which is exactly what the function fixes, so apply the migration.
+ */
+export async function recordAttempt(
+  admin: AdminClient,
+  fn: "record_code_attempt" | "record_join_attempt",
+  table: "code_attempts" | "join_attempts",
+  opts: { ip: string; windowMinutes: number; max: number },
+): Promise<boolean> {
+  const { data, error } = await admin.rpc(fn, {
+    _ip: opts.ip,
+    _window_minutes: opts.windowMinutes,
+    _max: opts.max,
+  });
+  if (!error) return Boolean(data);
+
+  // PGRST202: PostgREST could not find the function; 42883: Postgres says so.
+  const missing = error.code === "PGRST202" || error.code === "42883";
+  if (!missing) return false;
+
+  console.warn(
+    `${fn} is missing — apply supabase/migrations/20261020170000_atomic_rate_limits.sql`,
+  );
+  const since = new Date(Date.now() - opts.windowMinutes * 60_000).toISOString();
+  const { count } = await admin
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("ip", opts.ip)
+    .gte("created_at", since);
+  if ((count ?? 0) >= opts.max) return false;
+  await admin.from(table).insert({ ip: opts.ip });
+  return true;
+}
+
 type Throttled = { throttled: true };
 type Looked = { throttled: false; codeId: string | null };
 
@@ -23,21 +66,22 @@ type Looked = { throttled: false; codeId: string | null };
  * Records an attempt and returns the matching usable code, if any.
  *
  * Attempts are counted before the lookup so a burst of wrong guesses is paid
- * for whether or not any of them hit.
+ * for whether or not any of them hit. The count-and-record is one database
+ * call under a per-IP lock (`record_code_attempt`), so a burst of concurrent
+ * requests cannot all slip under the limit together — the original did a
+ * count, then an insert, then the lookup, and N parallel requests that
+ * arrived before any insert landed all saw count < max.
  */
 async function lookupCode(code: string): Promise<Throttled | Looked> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const ip = clientIp();
-  const since = new Date(Date.now() - WINDOW_MINUTES * 60_000).toISOString();
 
-  const { count } = await supabaseAdmin
-    .from("code_attempts")
-    .select("id", { count: "exact", head: true })
-    .eq("ip", ip)
-    .gte("created_at", since);
-  if ((count ?? 0) >= MAX_TRIES) return { throttled: true };
-
-  await supabaseAdmin.from("code_attempts").insert({ ip });
+  const allowed = await recordAttempt(supabaseAdmin, "record_code_attempt", "code_attempts", {
+    ip,
+    windowMinutes: WINDOW_MINUTES,
+    max: MAX_TRIES,
+  });
+  if (!allowed) return { throttled: true };
 
   const { data } = await supabaseAdmin
     .from("access_codes")
@@ -61,7 +105,7 @@ async function lookupCode(code: string): Promise<Throttled | Looked> {
  * sign-up round trip.
  */
 export const checkAccessCode = createServerFn({ method: "POST" })
-  .inputValidator((d) => codeInput.parse(d))
+  .validator((d) => codeInput.parse(d))
   .handler(async ({ data }) => {
     const result = await lookupCode(data.code);
     if (result.throttled) return { ok: false as const, reason: "throttled" as const };
@@ -88,7 +132,7 @@ const redeemInput = z
 /** Binds a role to the signed-in account, from either a ticket or a raw code. */
 export const redeemAccessCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => redeemInput.parse(d))
+  .validator((d) => redeemInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let codeId: string | null = null;
@@ -127,7 +171,7 @@ export const redeemAccessCode = createServerFn({ method: "POST" })
 
 export const createAccessCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
+  .validator((d) =>
     z
       .object({
         label: z.string().trim().min(1).max(80),

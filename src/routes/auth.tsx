@@ -73,7 +73,9 @@ function AuthPage() {
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) setMsg("err: google sign-in failed");
+    // Supabase's own message says whether the provider is simply not enabled
+    // on the project yet, which "sign-in failed" hid from whoever is debugging.
+    if (error) setMsg(`err: ${error.message.toLowerCase()}`);
   }
 
   return (

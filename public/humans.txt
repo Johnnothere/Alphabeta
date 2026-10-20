@@ -1,12 +1,15 @@
 /* TEAM */
+  Founders: Tej Gohil, Mehedi
   Built by: the alphabeta community
+  Where: London — home base at the University of Greenwich,
+         open to builders from every institution
   Motto: build. ship. help others ship.
 
 /* SITE */
-  Stack: TypeScript, React, TanStack Start
+  Stack: TypeScript, React 19, TanStack Start, Supabase, Railway
   Fonts: Geist, JetBrains Mono
-  Standards: HTML5, CSS3
+  Source: https://github.com/Johnnothere/Alphabeta
 
 /* PS */
   You read humans.txt. You're our kind of person.
-  Press / on the homepage.
+  Press / on the homepage and type 'help'.

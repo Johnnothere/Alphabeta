@@ -1,5 +1,5 @@
 import { createMiddleware } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequest, setResponseStatus } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./env";
@@ -9,6 +9,17 @@ class Unauthorized extends Error {
   constructor(message = "Unauthorized") {
     super(message);
   }
+}
+
+/**
+ * A thrown server-function error is serialised with the response's *current*
+ * status, so without setting it first a 401 reached the browser as a generic
+ * 500. Called only inside the `.server()` handler: that body is stripped from
+ * the client bundle, which is the only place a server-only import may live.
+ */
+function unauthorized(): never {
+  setResponseStatus(401, "Unauthorized");
+  throw new Unauthorized();
 }
 
 /**
@@ -31,10 +42,10 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
   async ({ next }) => {
     const request = getRequest();
     const authHeader = request?.headers?.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) throw new Unauthorized();
+    if (!authHeader?.startsWith("Bearer ")) unauthorized();
 
     const token = authHeader.slice("Bearer ".length).trim();
-    if (token.split(".").length !== 3) throw new Unauthorized();
+    if (token.split(".").length !== 3) unauthorized();
 
     const supabase = createClient<Database>(SUPABASE_URL(), SUPABASE_ANON_KEY(), {
       global: { headers: { Authorization: `Bearer ${token}` } },
@@ -43,7 +54,7 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
 
     const { data, error } = await supabase.auth.getClaims(token);
     const userId = data?.claims?.sub;
-    if (error || !userId) throw new Unauthorized();
+    if (error || !userId) unauthorized();
 
     return next({ context: { supabase, userId, claims: data.claims } });
   },

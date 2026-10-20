@@ -52,18 +52,28 @@ function Codes() {
   const [max, setMax] = useState("25");
   const [days, setDays] = useState("30");
   const [fresh, setFresh] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   async function make() {
-    const r = await create({
-      data: {
-        label: lbl || "untitled",
-        role,
-        maxUses: max ? Number(max) : null,
-        expiresInDays: days ? Number(days) : null,
-      },
-    });
-    setFresh(r.code);
-    setLbl("");
-    qc.invalidateQueries({ queryKey: ["codes"] });
+    setErr(null);
+    // Mirror the server schema so a bad value is reported here, not swallowed
+    // as an unhandled rejection with nothing on screen.
+    const maxUses = max ? Number(max) : null;
+    const expiresInDays = days ? Number(days) : null;
+    if (maxUses !== null && (maxUses < 1 || maxUses > 10_000))
+      return setErr("max uses must be 1–10000, or blank for unlimited");
+    if (expiresInDays !== null && (expiresInDays < 1 || expiresInDays > 365))
+      return setErr("expiry must be 1–365 days, or blank for never");
+    if (lbl.length > 80) return setErr("label is too long (80 max)");
+    try {
+      const r = await create({
+        data: { label: lbl || "untitled", role, maxUses, expiresInDays },
+      });
+      setFresh(r.code);
+      setLbl("");
+      qc.invalidateQueries({ queryKey: ["codes"] });
+    } catch {
+      setErr("could not create code");
+    }
   }
   async function toggle(id: string, active: boolean) {
     await supabase.from("access_codes").update({ active: !active }).eq("id", id);
@@ -76,7 +86,8 @@ function Codes() {
         <input
           aria-label="Label"
           className={`${input} flex-1`}
-          placeholder="label (e.g. hack/05 cohort)"
+          placeholder="label (e.g. hack/02 cohort)"
+          maxLength={80}
           value={lbl}
           onChange={(e) => setLbl(e.target.value)}
         />
@@ -116,6 +127,13 @@ function Codes() {
           <span className="text-muted-foreground">— copy it now, it won't be shown again</span>
         </p>
       )}
+      <p
+        className="mt-2 min-h-4 font-mono text-xs text-destructive"
+        role="status"
+        aria-live="polite"
+      >
+        {err}
+      </p>
       <table className="mt-5 w-full font-mono text-xs">
         <tbody>
           {codes.data?.map((c) => (
@@ -170,7 +188,11 @@ function Attendance() {
       .from("hackathon_attendance")
       .insert({ hackathon_id: hack, user_id: who });
     setErr(error ? (error.code === "23505" ? "already marked attended" : error.message) : null);
-    if (!error) qc.invalidateQueries({ queryKey: ["attendance"] });
+    if (!error) {
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+      // Attendance feeds the streak column of the eligibility table.
+      qc.invalidateQueries({ queryKey: ["member-overview"] });
+    }
   }
   async function addHack() {
     if (!name || !date) return;
@@ -355,6 +377,23 @@ function Members() {
   );
 }
 
+/**
+ * Applicants type the link freehand, so it is only rendered as an anchor when
+ * it parses as http(s); anything else (including `javascript:`) is shown as
+ * inert text. The page asks them to "bring something you built", so the link
+ * is the thing founders actually review — the original list showed emails only.
+ */
+function safeHref(raw: string | null): string | null {
+  if (!raw) return null;
+  const candidate = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const u = new URL(candidate);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function Requests() {
   const q = useQuery({
     queryKey: ["join-requests"],
@@ -362,24 +401,43 @@ function Requests() {
       (
         await supabase
           .from("join_requests")
-          .select("*")
+          .select("id, email, link, note, created_at")
           .order("created_at", { ascending: false })
           .limit(50)
       ).data ?? [],
   });
   return (
     <section className={box}>
-      <p className={label}>// public access requests</p>
+      <p className={label}>// public access requests · newest first</p>
       {!q.data?.length && <p className="mt-3 text-sm text-muted-foreground">None yet.</p>}
-      <ul className="mt-3 space-y-1 font-mono text-xs">
-        {q.data?.map((r) => (
-          <li key={r.id}>
-            <span className="text-muted-foreground">
-              {r.created_at.slice(0, 16).replace("T", " ")}
-            </span>{" "}
-            {r.email}
-          </li>
-        ))}
+      <ul className="mt-3 divide-y divide-border font-mono text-xs">
+        {q.data?.map((r) => {
+          const href = safeHref(r.link);
+          return (
+            <li key={r.id} className="py-2">
+              <div className="flex flex-wrap gap-x-3">
+                <span className="text-muted-foreground">
+                  {r.created_at.slice(0, 16).replace("T", " ")}
+                </span>
+                <span>{r.email}</span>
+              </div>
+              {r.link &&
+                (href ? (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="mt-1 block break-all text-signal hover:underline"
+                  >
+                    {r.link}
+                  </a>
+                ) : (
+                  <span className="mt-1 block break-all text-muted-foreground">{r.link}</span>
+                ))}
+              {r.note && <p className="mt-1 font-sans text-muted-foreground">{r.note}</p>}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

@@ -16,27 +16,48 @@ import {
   Stats,
 } from "@/components/alphabeta/sections";
 import { siteDataQuery } from "@/lib/site-data";
+import { SITE_DESCRIPTION, SITE_TITLE, SITE_URL } from "@/lib/site";
 
-const SITE_URL = import.meta.env["VITE_SITE_URL"] ?? "http://localhost:3000";
+const SITE_DATA_TIMEOUT_MS = 4_000;
 
 export const Route = createFileRoute("/")({
-  loader: ({ context }) => context.queryClient.ensureQueryData(siteDataQuery),
+  // The landing page must render even when Supabase is unreachable: the
+  // numbers and feed simply stay empty and React Query retries on the client.
+  // Letting the loader throw here would turn a stats outage into a 500 for
+  // the whole public site.
+  //
+  // Bounded, too: Railway health-checks this route, so a Supabase call that
+  // hangs would otherwise stall SSR, fail the check and restart the service.
+  loader: async ({ context }) => {
+    try {
+      await Promise.race([
+        context.queryClient.ensureQueryData(siteDataQuery),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("site data timed out")), SITE_DATA_TIMEOUT_MS),
+        ),
+      ]);
+    } catch (error) {
+      console.error(error);
+    }
+  },
   head: () => ({
     meta: [
-      { title: "Alphabeta — a society of builders" },
-      {
-        name: "description",
-        content: "Alphabeta is a no-fuss community of builders. We ship, and we help others ship.",
-      },
-      { property: "og:title", content: "Alphabeta — a society of builders" },
-      { property: "og:description", content: "No fuss. Only building. And helping people build." },
+      { title: SITE_TITLE },
+      { name: "description", content: SITE_DESCRIPTION },
+      { property: "og:title", content: SITE_TITLE },
+      { property: "og:description", content: SITE_DESCRIPTION },
       { property: "og:type", content: "website" },
-      { property: "og:url", content: SITE_URL },
+      { property: "og:url", content: `${SITE_URL}/` },
       { property: "og:image", content: `${SITE_URL}/og.png` },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt", content: "Build. Ship. Help others ship. — alphabeta" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: SITE_TITLE },
+      { name: "twitter:description", content: SITE_DESCRIPTION },
       { name: "twitter:image", content: `${SITE_URL}/og.png` },
     ],
-    links: [{ rel: "canonical", href: SITE_URL }],
+    links: [{ rel: "canonical", href: `${SITE_URL}/` }],
   }),
   component: Index,
 });
@@ -82,7 +103,14 @@ function Index() {
   const [active, setActive] = useState("");
   const [bootStep, setBootStep] = useState(0);
   const [bootDone, setBootDone] = useState(true);
+  // Rendered as ⌘ on the server and corrected after mount: the platform is
+  // not knowable during SSR, and a mismatch here would be a hydration error.
+  const [modKey, setModKey] = useState("⌘");
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    if (!/Mac|iPhone|iPad|iPod/.test(navigator.platform)) setModKey("Ctrl+");
+  }, []);
 
   // --- boot overlay -------------------------------------------------------
   useEffect(() => {
@@ -182,6 +210,10 @@ function Index() {
   }, []);
 
   const closeKeys = useCallback(() => setKeys(false), []);
+  // Stable identity matters: Terminal feeds this into its focus trap, whose
+  // effect re-runs — and yanks focus off the input — whenever the callback
+  // changes, which an inline arrow would do on every re-render of this page.
+  const closeTerm = useCallback(() => setTerm(false), []);
   const keysRef = useFocusTrap<HTMLDivElement>(keys, closeKeys);
 
   return (
@@ -252,7 +284,7 @@ function Index() {
               aria-label="Open terminal"
               className="rounded-md border border-glass-border px-1.5 py-0.5 hover:text-foreground"
             >
-              ⌘K
+              {modKey}K
             </button>
             <button
               onClick={() => setMenu((m) => !m)}
@@ -313,7 +345,7 @@ function Index() {
           </div>
           {(
             [
-              ["/ or ⌘K", "shell"],
+              [`/ or ${modKey}K`, "shell"],
               ["?", "this panel"],
               ["esc", "close"],
               ["↑↑↓↓←→←→ba", "???"],
@@ -327,7 +359,7 @@ function Index() {
         </div>
       )}
 
-      {term && <Terminal sections={SECTIONS} onGoto={go} onClose={() => setTerm(false)} />}
+      {term && <Terminal sections={SECTIONS} onGoto={go} onClose={closeTerm} />}
     </div>
   );
 }

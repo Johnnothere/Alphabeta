@@ -3,11 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { submitJoinRequest } from "@/lib/join.functions";
 import { EMPTY_SITE_DATA, siteDataQuery, type SiteData } from "@/lib/site-data";
+import { HASH, SITE_REPO, VERSION } from "@/lib/site";
 import { CountUp, Decode, GlowCard, Rotor } from "./effects";
-
-/** Build identifier shown in the hero and footer. Set at build time on Railway. */
-export const HASH = (import.meta.env["VITE_BUILD_SHA"] ?? "dev").slice(0, 7);
-export const VERSION = import.meta.env["VITE_APP_VERSION"] ?? "0.2.0";
 
 export function useSiteData(): SiteData {
   const { data } = useQuery(siteDataQuery);
@@ -48,8 +45,9 @@ export function Hero() {
         </span>
       </h1>
       <p className="relative mt-8 max-w-lg text-lg text-muted-foreground">
-        Alphabeta is a society of builders. No fuss, no hype — only building things and helping
-        people build theirs.
+        Alphabeta is a society of builders in London — home base at the University of Greenwich,
+        open to every institution. No fuss, no hype — only building things and helping people build
+        theirs.
       </p>
       <div className="relative mt-10 flex flex-wrap items-center justify-center gap-3">
         <a
@@ -406,8 +404,22 @@ export function RulesCode() {
 export function ManPage() {
   const faq = [
     ["Is it free?", "Yes. You pay in shipped work and in time spent helping others."],
-    ["Who can join?", "Anyone who builds. Show us something you made: a repo, a demo, a product."],
-    ["Is it remote?", "Mostly. Hackathons and a few small meetups happen in person."],
+    [
+      "Who can join?",
+      "Anyone who builds, from any university or none. Show us something you made: a repo, a demo, a product.",
+    ],
+    [
+      "Where are you?",
+      "London. Home base is the University of Greenwich, where the hackathons run — the first one was a three-hour web-app build in the King William lab. Members come from across institutions.",
+    ],
+    [
+      "Is it remote?",
+      "No. We build in the same room. The ships log and the vault are online so you can keep up between sessions, but the work happens in person.",
+    ],
+    [
+      "What's cross-disciplinary about it?",
+      "Code is the common language, not the only one. Design, hardware, security, data, writing — if you make things, you fit.",
+    ],
     [
       "What gets you removed?",
       "Hype with no output, gatekeeping, or treating help as a transaction.",
@@ -423,7 +435,9 @@ export function ManPage() {
           <span className="hidden sm:inline">ALPHABETA(7)</span>
         </div>
         <p className="mt-6 font-semibold">NAME</p>
-        <p className="pl-8 text-muted-foreground">alphabeta — a society of people who build</p>
+        <p className="pl-8 text-muted-foreground">
+          alphabeta — a cross-disciplinary society of people who build, London
+        </p>
         <p className="mt-4 font-semibold">SYNOPSIS</p>
         <p className="pl-8 text-muted-foreground">
           alphabeta [<span className="text-signal">--ship</span>] [
@@ -448,6 +462,14 @@ export function ManPage() {
           git(1), ship(1),{" "}
           <a href="/humans.txt" className="underline decoration-dotted hover:text-signal">
             humans.txt
+          </a>
+          ,{" "}
+          <a
+            href={SITE_REPO}
+            rel="noopener noreferrer"
+            className="underline decoration-dotted hover:text-signal"
+          >
+            source
           </a>
         </p>
       </div>
@@ -485,10 +507,7 @@ export function Join() {
         });
         return;
       }
-      setRes({
-        tone: "ok",
-        text: r.duplicate ? "200 OK · already queued" : `202 Accepted · ${email.trim()} queued`,
-      });
+      setRes({ tone: "ok", text: `202 Accepted · ${email.trim()} queued` });
       setEmail("");
       setLink("");
     } catch {

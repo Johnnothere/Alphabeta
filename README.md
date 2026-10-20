@@ -1,7 +1,8 @@
 # alphabeta
 
-The public site and members' area for ALPHABETA, a builders' community at the
-University of Greenwich.
+The public site and members' area for ALPHABETA — a cross-disciplinary society
+of builders in London, co-founded by Tej Gohil and Mehedi. Home base is the
+University of Greenwich; members come from every institution.
 
 Ported off Lovable Cloud. Runs on **GitHub → Railway → Supabase**.
 
@@ -116,6 +117,7 @@ start command. Add these service variables:
 | `HOST` | `0.0.0.0` |
 | `RAILPACK_NO_SPA` | `1` |
 | `TRUSTED_PROXY_HOPS` | `1` |
+| `TRUSTED_IP_HEADER` | leave unset on Railway (see below) |
 
 `VITE_SITE_URL` and `VITE_BUILD_SHA` are **not** needed on Railway — the build
 reads Railway's own `RAILWAY_PUBLIC_DOMAIN` and `RAILWAY_GIT_COMMIT_SHA`. Set
@@ -146,6 +148,12 @@ Migrations run here rather than in the Railway build on purpose: Railway builds
 can run concurrently per deploy, which is not safe for `db push`, and the web
 service has no reason to hold the database password.
 
+> **This workflow has never succeeded yet**: the three secrets above are not
+> set on the repository, so every run fails at `supabase link`. Until they are
+> set, apply new migrations by hand (Supabase SQL editor, the MCP, or
+> `supabase db push` from a linked local checkout). Migrations here are
+> written to be idempotent so a later `db push` re-applying them is harmless.
+
 ### 4. Bootstrap the first founder
 
 No founder exists yet, so the admin UI cannot mint the first code. Do it once
@@ -165,13 +173,22 @@ then enter the code on the bind screen. From then on, mint codes in
 ## How access works
 
 1. A visitor opens the terminal (`/` or `⌘K`) and runs `sudo access`.
-2. `checkAccessCode` hashes the input, rate-limits by IP, and on a match issues
-   a **single-use ticket** that expires in 30 minutes. The passphrase itself
-   never goes into browser storage.
+2. `checkAccessCode` hashes the input, rate-limits by IP (8 tries per 15
+   minutes, counted and recorded in one locked database call —
+   `record_code_attempt` — so a burst of parallel requests cannot slip under
+   the limit together), and on a match issues a **single-use ticket** that
+   expires in 30 minutes. The passphrase itself never goes into browser
+   storage. If the limiter itself cannot run, the guess is refused. The
+   attempt and ticket tables prune themselves probabilistically on each call,
+   so nothing needs a scheduler.
 3. They sign up or sign in. `/vault` redeems the ticket through
    `redeem_code`, which does the use-counting, the redemption record, and the
    role grant in one transaction with the code row locked.
 4. Row-level security — not the UI — decides what they can read from then on.
+
+Member-facing dropdowns and the founders' eligibility table list **members**
+only — accounts that signed up but never redeemed a code are invisible to
+everyone but themselves (`20261020160000_members_only_directory.sql`).
 
 The quiet-room meetup unlocks on **any one** of: three consecutive hackathons,
 three vouches from members (founders cannot vouch), or ten distinct members
@@ -193,19 +210,34 @@ page a claim the community cannot support. Fill the tables from
 
 **Client IP for rate limiting.** `X-Forwarded-For` is client-appendable — its
 left-most entry is whatever the caller claimed. `src/lib/client-ip.ts` counts
-back from the right by `TRUSTED_PROXY_HOPS` instead. Railway's own
-documentation does not specify its hop count or a trustworthy client-IP header,
-and its staff answers on the subject contradict each other, so **verify this
-on your own service** before relying on it: log `x-forwarded-for`, `x-real-ip`
-and the socket peer, hit the route normally and then with a spoofed
-`X-Forwarded-For`, and set `TRUSTED_PROXY_HOPS` to match. Getting it too high
-is safe (everyone shares a bucket); too low is bypassable.
+back from the right by `TRUSTED_PROXY_HOPS` instead. Railway's edge *appends*
+to the chain (measured on Railway's community forum, and its staff name the
+right-most value as the trustworthy one), so `1` is correct there.
 
-**`public/vault/*.jpg` are Lovable's placeholder images.** Replace them with
-real photos before launch, or delete them.
+Single-value headers (`CF-Connecting-IP`, `True-Client-IP`, `X-Real-IP`) are
+**not** trusted by default: Railway does not set the first two at all — they
+pass through from the caller — and has had a bug where a caller's `X-Real-IP`
+survived next to the edge's copy. An earlier version of this file preferred
+them, which let anyone bypass the access-code limiter with one spoofed header.
+If you put a proxy in front that genuinely overwrites one (Cloudflare does for
+`cf-connecting-ip`), set `TRUSTED_IP_HEADER` to its name and bump
+`TRUSTED_PROXY_HOPS` to `2`. A chain *shorter* than the hop count is treated
+as an unknown caller (shared bucket) rather than falling back to the
+left-most, spoofable entry — so a hop count set too high fails closed.
 
-**`public/.well-known/security.txt`** points at `security@alphabeta.dev`. Point
-it at an address that exists, and keep `Expires` in the future.
+**`robots.txt` and `sitemap.xml` are routes**, not files in `public/`, so the
+sitemap line carries the real absolute origin. **`og.png`** is generated from
+`scripts/og-card.html` (open it in a browser at 1200×630 and screenshot, or use
+headless Chromium) — regenerate it if the headline changes.
+
+**`public/.well-known/security.txt`** points reports at this repo's GitHub
+security advisories, with `SECURITY.md` as the policy. Keep `Expires` in the
+future.
+
+**Security headers** (`nosniff`, `X-Frame-Options`, HSTS, referrer and
+permissions policies) are added to every response in `src/start.ts`. There is
+no Content-Security-Policy yet: Start's SSR emits inline scripts, so a useful
+CSP needs per-request nonces threaded through the framework.
 
 ---
 
@@ -216,6 +248,8 @@ src/
   components/alphabeta/   public landing page: effects, sections, terminal
   routes/
     index.tsx             landing page (composes the sections)
+    robots[.]txt.ts       robots.txt with an absolute sitemap URL
+    sitemap[.]xml.ts      sitemap.xml for the public page
     auth.tsx              sign in / sign up
     auth_.callback.tsx    OAuth + email confirmation landing
     _authenticated/       members' vault (route guard + pages)
@@ -224,6 +258,7 @@ src/
     join.functions.ts     rate-limited public join requests
     eligibility.ts        meetup rules, mirrored from SQL
     client-ip.ts          trusted client IP resolution
+    site.ts               site name, origin, build id, description
     site-data.ts          landing page data query
   integrations/supabase/  clients, auth middleware, generated types
 supabase/migrations/      schema, policies, functions

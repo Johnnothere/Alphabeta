@@ -23,12 +23,23 @@ function usable(value: string | undefined): string | undefined {
 const BUILD_SHA =
   usable(process.env["VITE_BUILD_SHA"]) ?? usable(process.env["RAILWAY_GIT_COMMIT_SHA"]) ?? "dev";
 
-const SITE_URL =
+const RESOLVED_SITE_URL =
   usable(process.env["VITE_SITE_URL"]) ??
   (usable(process.env["RAILWAY_PUBLIC_DOMAIN"])
     ? `https://${process.env["RAILWAY_PUBLIC_DOMAIN"]}`
-    : undefined) ??
-  "http://localhost:3000";
+    : undefined);
+
+// On Railway a missing origin would silently bake `http://localhost:3000` into
+// canonical, og:*, robots.txt and sitemap.xml for the whole deploy. Better to
+// fail the build and say why than publish that.
+if (!RESOLVED_SITE_URL && process.env["RAILWAY_ENVIRONMENT"]) {
+  throw new Error(
+    "No public origin for this build: RAILWAY_PUBLIC_DOMAIN is unset and VITE_SITE_URL is not " +
+      "configured. Generate a domain for the service (or set VITE_SITE_URL) and redeploy.",
+  );
+}
+
+const SITE_URL = RESOLVED_SITE_URL ?? "http://localhost:3000";
 
 /**
  * Replaces Lovable's `@lovable.dev/vite-tanstack-config` wrapper, which bundled
