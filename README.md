@@ -113,11 +113,15 @@ start command. Add these service variables:
 | `SUPABASE_URL` | same URL |
 | `SUPABASE_ANON_KEY` | same key |
 | `SUPABASE_SERVICE_ROLE_KEY` | **service role key — never prefix with `VITE_`** |
-| `VITE_SITE_URL` | your public origin |
-| `VITE_BUILD_SHA` | `${{RAILWAY_GIT_COMMIT_SHA}}` |
 | `HOST` | `0.0.0.0` |
 | `RAILPACK_NO_SPA` | `1` |
 | `TRUSTED_PROXY_HOPS` | `1` |
+
+`VITE_SITE_URL` and `VITE_BUILD_SHA` are **not** needed on Railway — the build
+reads Railway's own `RAILWAY_PUBLIC_DOMAIN` and `RAILWAY_GIT_COMMIT_SHA`. Set
+`VITE_SITE_URL` only if you attach a custom domain. Don't try
+`${{RAILWAY_GIT_COMMIT_SHA}}`: Railway's reference syntax resolves your own
+variables only, so it silently produces nothing.
 
 Two of those are load-bearing and easy to miss:
 

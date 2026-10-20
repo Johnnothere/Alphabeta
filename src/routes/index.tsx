@@ -17,7 +17,7 @@ import {
 } from "@/components/alphabeta/sections";
 import { siteDataQuery } from "@/lib/site-data";
 
-const SITE_URL = import.meta.env["VITE_SITE_URL"] ?? "https://alphabeta.dev";
+const SITE_URL = import.meta.env["VITE_SITE_URL"] ?? "http://localhost:3000";
 
 export const Route = createFileRoute("/")({
   loader: ({ context }) => context.queryClient.ensureQueryData(siteDataQuery),
