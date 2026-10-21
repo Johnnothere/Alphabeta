@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UtcClock, useFocusTrap } from "@/components/alphabeta/effects";
 import { Terminal } from "@/components/alphabeta/terminal";
@@ -279,6 +279,12 @@ function Index() {
             <span className="hidden sm:inline">
               <UtcClock />
             </span>
+            <Link
+              to="/vault"
+              className="rounded-md border border-glass-border px-2 py-0.5 text-foreground hover:bg-accent"
+            >
+              vault ↗
+            </Link>
             <button
               onClick={() => setTerm(true)}
               aria-label="Open terminal"

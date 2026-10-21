@@ -16,6 +16,7 @@ const HELP = [
   "ls [-a]           list sections",
   "cd <section>      jump to a section",
   "cat <file>        read a file",
+  "login             member sign-in",
   "whoami            identify",
   "date              system time",
   "uname -a          system info",
@@ -40,6 +41,8 @@ const COMMANDS = [
   "history",
   "clear",
   "exit",
+  "login",
+  "signin",
   "sudo",
   "man",
   "neofetch",
@@ -300,6 +303,11 @@ export function Terminal({
         return out(...NEOFETCH);
       case "rm":
         return err("nice try.");
+      case "login":
+      case "signin":
+        out("opening member sign-in…");
+        navigate({ to: "/auth" });
+        return;
       case "sudo":
         if (arg === "access") {
           setMode("pass");

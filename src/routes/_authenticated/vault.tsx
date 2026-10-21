@@ -1,9 +1,9 @@
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { redeemAccessCode } from "@/lib/access.functions";
+import { completeOnboarding } from "@/lib/access.functions";
 import { meQuery } from "@/lib/vault";
 import { TICKET_KEY } from "@/components/alphabeta/terminal";
 
@@ -33,52 +33,6 @@ function VaultLayout() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const me = useQuery(meQuery);
-  const redeem = useServerFn(redeemAccessCode);
-  const [code, setCode] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const tried = useRef(false);
-
-  async function tryRedeem(payload: { code?: string; ticket?: string }) {
-    if (payload.code !== undefined) {
-      const len = payload.code.trim().length;
-      if (len < 4 || len > 64) {
-        setMsg("Sorry, try again.");
-        return;
-      }
-    }
-    setMsg("verifying…");
-    try {
-      const r = await redeem({ data: payload });
-      if (r.ok) {
-        setMsg(null);
-        await qc.invalidateQueries({ queryKey: ["me"] });
-      } else {
-        setMsg(r.reason === "throttled" ? "too many attempts · try later" : "Sorry, try again.");
-      }
-    } catch {
-      // A thrown serverFn (401, network) left the old code showing
-      // "verifying…" forever with no way to tell what happened.
-      setMsg("could not reach the server · try again");
-    }
-  }
-
-  // Redeem the ticket the public terminal parked, if there is one. The ticket
-  // is single-use server-side, so clearing it here is just tidiness.
-  useEffect(() => {
-    if (tried.current || !me.data || me.data.isMember) return;
-    let ticket: string | null = null;
-    try {
-      ticket = sessionStorage.getItem(TICKET_KEY);
-      if (ticket) sessionStorage.removeItem(TICKET_KEY);
-    } catch {
-      /* storage blocked */
-    }
-    if (ticket) {
-      tried.current = true;
-      void tryRedeem({ ticket });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me.data]);
 
   async function signOut() {
     await qc.cancelQueries();
@@ -99,47 +53,171 @@ function VaultLayout() {
   if (!me.data?.isMember) {
     return (
       <Shell>
-        <div className="glass mx-auto mt-24 max-w-md rounded-2xl p-6 font-mono text-sm">
-          <p className="text-destructive">403 · EACCES: permission denied, open '/vault'</p>
-          <p className="mt-3 text-muted-foreground">
-            Your account isn't bound to an access code yet.
-          </p>
-          <form
-            className="mt-5 flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (code) void tryRedeem({ code });
-            }}
-          >
-            <label className="sr-only" htmlFor="vault-code">
-              Access code
-            </label>
-            <input
-              id="vault-code"
-              type="password"
-              autoComplete="one-time-code"
-              spellCheck={false}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="passphrase"
-              className="flex-1 rounded-lg border border-input bg-transparent px-3 py-2 outline-none focus:border-signal"
-            />
-            <button className="rounded-lg bg-primary px-4 text-primary-foreground">bind</button>
-          </form>
-          <p className="mt-3 min-h-5 text-xs text-signal" role="status" aria-live="polite">
-            {msg && <>&gt; {msg}</>}
-          </p>
-          <button
-            onClick={signOut}
-            className="mt-2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            logout
-          </button>
-        </div>
+        <Onboarding
+          defaultName={me.data?.profile?.display_name ?? ""}
+          onDone={() => qc.invalidateQueries({ queryKey: ["me"] })}
+          onSignOut={signOut}
+        />
       </Shell>
     );
   }
 
+  return <Member me={me.data} onSignOut={signOut} />;
+}
+
+/**
+ * Shown once, to a signed-in account with no role yet. Collects name + phone +
+ * access code (or uses a ticket the terminal parked) and redeems in one call.
+ */
+function Onboarding({
+  defaultName,
+  onDone,
+  onSignOut,
+}: {
+  defaultName: string;
+  onDone: () => void;
+  onSignOut: () => void;
+}) {
+  const onboard = useServerFn(completeOnboarding);
+  const [name, setName] = useState(defaultName);
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [ticket, setTicket] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    try {
+      setTicket(sessionStorage.getItem(TICKET_KEY));
+    } catch {
+      /* storage blocked */
+    }
+  }, []);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    if (name.trim().length < 1) return setMsg("your name, please");
+    if (phone.trim().length < 5) return setMsg("a reachable phone number, please");
+    if (!ticket && code.trim().length < 4) return setMsg("your access code, please");
+    setBusy(true);
+    setMsg("verifying…");
+    try {
+      const payload = ticket
+        ? { name: name.trim(), phone: phone.trim(), ticket }
+        : { name: name.trim(), phone: phone.trim(), code: code.trim() };
+      const r = await onboard({ data: payload });
+      if (r.ok) {
+        try {
+          sessionStorage.removeItem(TICKET_KEY);
+        } catch {
+          /* ignore */
+        }
+        setMsg(null);
+        onDone();
+      } else if (r.reason === "throttled") {
+        setMsg("too many attempts · try again in a few minutes");
+        setBusy(false);
+      } else {
+        // A parked ticket can expire (30 min); fall back to asking for the code.
+        if (ticket) setTicket(null);
+        setMsg("that code didn't work — check it and try again");
+        setBusy(false);
+      }
+    } catch {
+      setMsg("could not reach the server · try again");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="glass mx-auto mt-24 max-w-md rounded-2xl p-6">
+      <p className="font-mono text-xs text-muted-foreground">// 01 bind your access</p>
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">Almost in.</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        You're signed in. Add your details and the access code a founder gave you, and you're a
+        member. Your number stays private — only founders can see it.
+      </p>
+      <form onSubmit={submit} className="mt-6 space-y-3">
+        <Field label="name">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={60}
+            autoComplete="name"
+            placeholder="how you're known"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="phone">
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            maxLength={32}
+            type="tel"
+            autoComplete="tel"
+            placeholder="+44 …"
+            className={inputCls}
+          />
+        </Field>
+        {!ticket && (
+          <Field label="access code">
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              maxLength={64}
+              autoComplete="one-time-code"
+              spellCheck={false}
+              placeholder="AB-XXXX-XXXX-XXXX"
+              className={`${inputCls} font-mono`}
+            />
+          </Field>
+        )}
+        {ticket && (
+          <p className="font-mono text-[11px] text-signal">code accepted — just your details</p>
+        )}
+        <button
+          disabled={busy}
+          className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? "…" : "Enter the vault"}
+        </button>
+      </form>
+      <p className="mt-3 min-h-5 font-mono text-xs text-signal" role="status" aria-live="polite">
+        {msg && <>&gt; {msg}</>}
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        No code yet? Ask a founder, or request one from the{" "}
+        <Link to="/" hash="join" className="text-signal hover:underline">
+          join form
+        </Link>
+        .
+      </p>
+      <button
+        onClick={onSignOut}
+        className="mt-3 font-mono text-xs text-muted-foreground hover:text-foreground"
+      >
+        logout
+      </button>
+    </div>
+  );
+}
+
+const inputCls =
+  "w-full rounded-lg border border-input bg-transparent px-3 py-2.5 text-sm outline-none focus:border-signal";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="font-mono text-[11px] text-muted-foreground">{label}</span>
+      <div className="mt-1">{children}</div>
+    </label>
+  );
+}
+
+type MeData = { profile: { handle: string } | null; isFounder: boolean };
+
+function Member({ me, onSignOut }: { me: MeData; onSignOut: () => void }) {
   return (
     <Shell>
       <nav className="glass sticky top-4 z-30 mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 rounded-full px-5 py-2.5 font-mono text-xs">
@@ -159,7 +237,7 @@ function VaultLayout() {
               {n.label}
             </Link>
           ))}
-          {me.data.isFounder && (
+          {me.isFounder && (
             <Link
               to="/vault/admin"
               activeProps={{ className: "text-signal" }}
@@ -171,10 +249,10 @@ function VaultLayout() {
         </div>
         <div className="flex items-center gap-3 text-muted-foreground">
           <span>
-            @{me.data.profile?.handle}
-            {me.data.isFounder ? " #" : " $"}
+            @{me.profile?.handle}
+            {me.isFounder ? " #" : " $"}
           </span>
-          <button onClick={signOut} className="hover:text-foreground">
+          <button onClick={onSignOut} className="hover:text-foreground">
             logout
           </button>
         </div>

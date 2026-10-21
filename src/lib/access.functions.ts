@@ -169,6 +169,65 @@ export const redeemAccessCode = createServerFn({ method: "POST" })
     return { ok: true as const, role };
   });
 
+const onboardInput = z
+  .object({
+    name: z.string().trim().min(1).max(60),
+    phone: z.string().trim().min(5).max(32),
+    code: z.string().trim().min(4).max(64).optional(),
+    ticket: z.string().uuid().optional(),
+  })
+  .refine((v) => Boolean(v.code || v.ticket), { message: "code or ticket required" });
+
+/**
+ * One-step onboarding for a signed-in account with no role yet: redeem the
+ * access code (or the ticket the terminal parked), set the display name, and
+ * save the private phone number — all server-side, so the role grant and the
+ * profile writes either all happen or none do from the caller's point of view.
+ */
+export const completeOnboarding = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d) => onboardInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let codeId: string | null = null;
+
+    if (data.ticket) {
+      const { data: claimed } = await supabaseAdmin
+        .from("access_tickets")
+        .update({ used_at: new Date().toISOString() })
+        .eq("id", data.ticket)
+        .is("used_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .select("code_id")
+        .maybeSingle();
+      codeId = claimed?.code_id ?? null;
+    } else if (data.code) {
+      const result = await lookupCode(data.code);
+      if (result.throttled) return { ok: false as const, reason: "throttled" as const };
+      codeId = result.codeId;
+    }
+    if (!codeId) return { ok: false as const, reason: "invalid" as const };
+
+    const { data: role, error } = await supabaseAdmin.rpc("redeem_code", {
+      _code_id: codeId,
+      _user_id: context.userId,
+    });
+    if (error) return { ok: false as const, reason: "invalid" as const };
+
+    // Role is granted; the profile writes are best-effort refinements on top.
+    // A member with a role but a stale display name is a far better failure
+    // than refusing the whole redemption because a name update blipped.
+    await supabaseAdmin
+      .from("profiles")
+      .update({ display_name: data.name })
+      .eq("id", context.userId);
+    await supabaseAdmin
+      .from("member_private")
+      .upsert({ user_id: context.userId, phone: data.phone }, { onConflict: "user_id" });
+
+    return { ok: true as const, role };
+  });
+
 export const createAccessCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d) =>
