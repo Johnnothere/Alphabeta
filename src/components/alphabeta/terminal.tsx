@@ -1,22 +1,19 @@
-import { useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { checkAccessCode } from "@/lib/access.functions";
+import { SOCIALS } from "@/content";
 import { HASH, SITE_REPO, VERSION } from "@/lib/site";
+import { socialHref } from "./icons";
 import { useFocusTrap } from "./effects";
 
 type Line = { k: "in" | "out" | "err" | "ok"; s: string };
 type Section = { id: string; label: string };
-
-/** Key the ticket is parked under between the terminal and /vault. */
-export const TICKET_KEY = "ab_ticket";
 
 const HELP = [
   "help              this list",
   "ls [-a]           list sections",
   "cd <section>      jump to a section",
   "cat <file>        read a file",
-  "login             member sign-in",
+  "open <name>       open a social link",
+  "socials           list our channels",
   "whoami            identify",
   "date              system time",
   "uname -a          system info",
@@ -32,6 +29,8 @@ const COMMANDS = [
   "ls",
   "cd",
   "cat",
+  "open",
+  "socials",
   "echo",
   "pwd",
   "whoami",
@@ -41,28 +40,22 @@ const COMMANDS = [
   "history",
   "clear",
   "exit",
-  "login",
-  "signin",
-  "sudo",
   "man",
   "neofetch",
   "version",
   "ping",
-  "ssh",
   "vim",
   "git",
   "npm",
   "make",
-  "open",
 ];
 
 const FILES: Record<string, string[]> = {
   "humans.txt": [
     "/* TEAM */",
-    "  Founders: Tej Gohil, Mehedi",
+    "  Founders: Tej, Mehedi",
     "  Built by: the alphabeta community",
-    "  Where: London — home base at the University of Greenwich,",
-    "         open to builders from every institution",
+    "  Where: London — University of Greenwich, open to every institution",
     "  Motto: build. ship. help others ship.",
   ],
   "rules.ts": [
@@ -78,14 +71,14 @@ const FILES: Record<string, string[]> = {
   readme: [
     "ALPHABETA — a cross-disciplinary society of builders, London.",
     "Three rules: no fuss · only building · help others build.",
-    "Apply with something you made. Get vouched. You're in.",
+    "Turn up to a build night. Make something. It goes in the registry.",
   ],
   "readme.md": [
     "ALPHABETA — a cross-disciplinary society of builders, London.",
     "Three rules: no fuss · only building · help others build.",
-    "Apply with something you made. Get vouched. You're in.",
+    "Turn up to a build night. Make something. It goes in the registry.",
   ],
-  ".bash_history": ["sudo access", "cd .vault", "git push --force", "rm -rf hype/"],
+  ".bash_history": ["cd registry", "git commit -m 'ship'", "make", "open github"],
 };
 
 const NEOFETCH = [
@@ -110,17 +103,12 @@ export function Terminal({
   onGoto: (id: string) => void;
   onClose: () => void;
 }) {
-  const navigate = useNavigate();
-  const check = useServerFn(checkAccessCode);
   const [lines, setLines] = useState<Line[]>([
     { k: "out", s: `alphabeta shell ${VERSION} — type 'help'` },
   ]);
   const [val, setVal] = useState("");
-  const [mode, setMode] = useState<"cmd" | "pass">("cmd");
-  const [fails, setFails] = useState(0);
   const [hist, setHist] = useState<string[]>([]);
   const [hi, setHi] = useState(-1);
-  const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -129,7 +117,7 @@ export function Terminal({
 
   useEffect(() => {
     inputRef.current?.focus();
-  }, [mode]);
+  }, []);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [lines]);
@@ -137,58 +125,6 @@ export function Terminal({
   const print = (...l: Line[]) => setLines((p) => [...p, ...l]);
   const out = (...s: string[]) => print(...s.map((x) => ({ k: "out" as const, s: x })));
   const err = (s: string) => print({ k: "err", s });
-
-  async function submitPass(code: string) {
-    // The server schema requires 4–64 characters; a shorter or empty entry is
-    // a wrong passphrase, not an outage, and should read as one.
-    if (code.trim().length < 4 || code.trim().length > 64) {
-      err("Sorry, try again.");
-      return;
-    }
-    setBusy(true);
-    let r: Awaited<ReturnType<typeof check>> | { ok: false; reason: "network" };
-    try {
-      r = await check({ data: { code } });
-    } catch {
-      r = { ok: false, reason: "network" };
-    }
-    setBusy(false);
-
-    if (r.ok) {
-      // Park the server-issued ticket, never the passphrase. The original kept
-      // the plaintext code in sessionStorage across the whole sign-up flow,
-      // where any script on the origin could read a live credential.
-      try {
-        sessionStorage.setItem(TICKET_KEY, r.ticket);
-      } catch {
-        /* storage blocked — the code can still be entered on the bind screen */
-      }
-      print({ k: "ok", s: "access granted. binding identity…" });
-      setTimeout(() => navigate({ to: "/auth" }), 700);
-      return;
-    }
-    if (r.reason === "network") {
-      // A thrown server function (500, CSRF, offline) is not a wrong code and
-      // must not count toward the three strikes.
-      err("sudo: could not reach the server. try again in a moment.");
-      setMode("cmd");
-      return;
-    }
-    if (r.reason === "throttled") {
-      err("sudo: too many attempts. locked for 15m.");
-      setMode("cmd");
-      return;
-    }
-    const f = fails + 1;
-    setFails(f);
-    if (f >= 3) {
-      err("sudo: 3 incorrect password attempts");
-      setMode("cmd");
-      setFails(0);
-    } else {
-      err("Sorry, try again.");
-    }
-  }
 
   function complete() {
     const raw = val.replace(/^\s+/, "");
@@ -200,20 +136,19 @@ export function Terminal({
       ? COMMANDS
       : head === "cd"
         ? sections.map((s) => s.id)
-        : head === "cat" || head === "less" || head === "more"
+        : head === "cat"
           ? Object.keys(FILES)
-          : [];
+          : head === "open"
+            ? SOCIALS.map((s) => s.kind)
+            : [];
     const matches = pool.filter((p) => p.startsWith(word));
     if (!matches.length) return;
     if (matches.length === 1) {
       setVal([...parts.slice(0, -1), matches[0]].join(" ") + (isFirst ? " " : ""));
       return;
     }
-    // Several: extend to the common prefix and show the options, like a shell.
     let prefix = matches[0]!;
-    for (const m of matches) {
-      while (!m.startsWith(prefix)) prefix = prefix.slice(0, -1);
-    }
+    for (const m of matches) while (!m.startsWith(prefix)) prefix = prefix.slice(0, -1);
     setVal([...parts.slice(0, -1), prefix].join(" "));
     out(matches.join("  "));
   }
@@ -227,8 +162,13 @@ export function Terminal({
     const c = c0.toLowerCase();
     const arg = args.join(" ").toLowerCase();
 
-    const goto = (id: string) => {
-      onGoto(id);
+    const goto = (id: string) => onGoto(id);
+    const openUrl = (url: string) => {
+      try {
+        window.open(url, "_blank", "noopener,noreferrer");
+      } catch {
+        /* popup blocked */
+      }
     };
 
     switch (c) {
@@ -238,7 +178,7 @@ export function Terminal({
       case "ls":
       case "dir": {
         const list = sections.map((s) => s.id + "/");
-        if (arg.includes("-a") || arg.includes("-la")) list.unshift("./", "../", ".vault/");
+        if (arg.includes("-a")) list.unshift("./", "../", ".git/");
         return out(list.join("  "));
       }
       case "cd":
@@ -247,7 +187,6 @@ export function Terminal({
           onGoto("top");
           return;
         }
-        if (arg === ".vault" || arg === ".vault/") return err("cd: .vault: Permission denied");
         const t = sections.find(
           (s) => s.id === arg.replace(/\/$/, "") || s.label.toLowerCase() === arg,
         );
@@ -260,19 +199,34 @@ export function Terminal({
       case "less":
       case "more": {
         if (!arg) return err(`${c}: missing file operand`);
-        if (arg.startsWith(".vault")) return err(`${c}: ${arg}: Permission denied`);
-        // hasOwn: a plain object would otherwise answer `cat constructor` with
-        // Object.prototype's property and crash on the spread.
         const key = Object.hasOwn(FILES, arg) ? arg : arg.replace(/^\.\//, "");
         const f = Object.hasOwn(FILES, key) ? FILES[key] : undefined;
         if (!f) return err(`${c}: ${arg}: No such file or directory`);
         return out(...f);
       }
+      case "socials": {
+        if (!SOCIALS.length) return out("no channels listed yet.");
+        return out(...SOCIALS.map((s) => `${s.kind.padEnd(12)} ${socialHref(s)}`));
+      }
+      case "open": {
+        const s = SOCIALS.find((x) => x.kind === arg);
+        if (s) {
+          out(`opening ${s.kind}…`);
+          openUrl(socialHref(s));
+          return;
+        }
+        if (arg === "source" || arg === "github" || arg === "repo") {
+          out("opening source…");
+          openUrl(SITE_REPO);
+          return;
+        }
+        return err(`open: ${arg || "what?"}: not found. try 'socials'`);
+      }
       case "echo":
         return out(args.join(" "));
       case "whoami":
       case "id":
-        return out("guest (uid=1000 gid=1000 groups=builders-pending)");
+        return out("guest (uid=1000 gid=1000 groups=builders)");
       case "date":
         return out(new Date().toUTCString());
       case "uname":
@@ -295,7 +249,7 @@ export function Terminal({
       case "-v":
         return out(`alphabeta v${VERSION}-${HASH}`);
       case "man":
-        if (!arg || arg === "alphabeta") return goto("man");
+        if (!arg || arg === "alphabeta") return goto("faq");
         return err(`No manual entry for ${arg}`);
       case "neofetch":
       case "fetch":
@@ -303,27 +257,8 @@ export function Terminal({
         return out(...NEOFETCH);
       case "rm":
         return err("nice try.");
-      case "login":
-      case "signin":
-        out("opening member sign-in…");
-        navigate({ to: "/auth" });
-        return;
       case "sudo":
-        if (arg === "access") {
-          setMode("pass");
-          return out("[sudo] passphrase for member:");
-        }
-        if (arg === "rm -rf /" || arg.startsWith("rm")) return err("nice try. with sudo.");
         return err("guest is not in the sudoers file. This incident will be reported.");
-      case "su":
-        return err("su: Authentication failure");
-      case "open":
-      case "vault":
-      case "./vault":
-        if (c === "open" && !arg.includes("vault")) return err(`open: ${arg}: not here`);
-        return err("vault: Permission denied. hint: sudo access");
-      case "ssh":
-        return err("ssh: connect to host vault port 22: Connection refused (bring a code)");
       case "ping":
         return out(
           `PING ${arg || "greenwich.london"}: 56 data bytes`,
@@ -358,7 +293,8 @@ export function Terminal({
         return out("🚂💨  (you meant ls)");
       case "hack":
       case "hackathon":
-        return goto("process");
+      case "build":
+        return goto("registry");
       case "join":
       case "apply":
         return goto("join");
@@ -379,7 +315,7 @@ export function Terminal({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Terminal"
+        aria-label="Command palette"
         className="glass w-[min(620px,92vw)] overflow-hidden rounded-2xl"
         onClick={(e) => {
           e.stopPropagation();
@@ -393,15 +329,12 @@ export function Terminal({
             <span className="h-2.5 w-2.5 rounded-full bg-muted" />
           </span>
           <span>guest@alphabeta — zsh — 80×24</span>
-          <button onClick={close} aria-label="Close terminal" className="hover:text-foreground">
+          <button onClick={close} aria-label="Close" className="hover:text-foreground">
             esc
           </button>
         </div>
 
         <div className="max-h-[50vh] overflow-y-auto px-4 py-3 font-mono text-[13px] leading-6">
-          {/* The log is its own live region. The original wrapped the log *and*
-              the text input in one `aria-live` container, so screen readers
-              re-announced the whole transcript on every keystroke. */}
           <div role="log" aria-live="polite" aria-atomic="false">
             {lines.map((l, i) => (
               <div
@@ -425,25 +358,23 @@ export function Terminal({
             className="flex items-center gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (busy) return;
               const v = val;
               setVal("");
               setHi(-1);
-              if (mode === "pass") void submitPass(v);
-              else run(v);
+              run(v);
             }}
           >
             <span className="text-signal" aria-hidden>
-              {mode === "pass" ? "🔑" : "$"}
+              $
             </span>
             <label htmlFor="term-in" className="sr-only">
-              {mode === "pass" ? "Passphrase" : "Command"}
+              Command
             </label>
             <input
               id="term-in"
               ref={inputRef}
-              type={mode === "pass" ? "password" : "text"}
-              autoComplete={mode === "pass" ? "one-time-code" : "off"}
+              type="text"
+              autoComplete="off"
               spellCheck={false}
               autoCapitalize="off"
               value={val}
@@ -451,19 +382,21 @@ export function Terminal({
               onKeyDown={(e) => {
                 if (e.key === "Tab") {
                   e.preventDefault();
-                  if (mode === "cmd") complete();
+                  complete();
                   return;
                 }
-                // ctrl+c abandons the line — and a passphrase prompt.
                 if (e.ctrlKey && e.key.toLowerCase() === "c") {
                   e.preventDefault();
+                  print({ k: "in", s: `guest@alphabeta:~$ ${val}^C` });
                   setVal("");
                   setHi(-1);
-                  print({ k: "in", s: mode === "pass" ? "^C" : `guest@alphabeta:~$ ${val}^C` });
-                  setMode("cmd");
                   return;
                 }
-                if (mode !== "cmd") return;
+                if (e.ctrlKey && e.key.toLowerCase() === "l") {
+                  e.preventDefault();
+                  setLines([]);
+                  return;
+                }
                 if (e.key === "ArrowUp") {
                   e.preventDefault();
                   const n = Math.min(hi + 1, hist.length - 1);
@@ -476,18 +409,9 @@ export function Terminal({
                   setHi(n);
                   setVal(n < 0 ? "" : (hist[n] ?? ""));
                 }
-                if (e.ctrlKey && e.key.toLowerCase() === "l") {
-                  e.preventDefault();
-                  setLines([]);
-                }
               }}
               className="flex-1 bg-transparent outline-none"
             />
-            {busy && (
-              <span className="text-muted-foreground" aria-hidden>
-                …
-              </span>
-            )}
           </form>
           <div ref={endRef} />
         </div>

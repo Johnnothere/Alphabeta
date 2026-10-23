@@ -1,17 +1,15 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  createRootRouteWithContext,
+  createRootRoute,
   useRouter,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { supabase } from "@/integrations/supabase/client";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/site";
 
 function NotFoundComponent() {
@@ -32,10 +30,8 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: ErrorComponentProps) {
-  console.error(error);
+function ErrorComponent({ reset }: ErrorComponentProps) {
   const router = useRouter();
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
@@ -67,7 +63,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -94,7 +90,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
   }),
   shellComponent: RootShell,
-  component: RootComponent,
+  component: () => <Outlet />,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
@@ -110,25 +106,5 @@ function RootShell({ children }: { children: ReactNode }) {
         <Scripts />
       </body>
     </html>
-  );
-}
-
-function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-  const router = useRouter();
-  useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-      router.invalidate();
-      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
-    });
-    return () => data.subscription.unsubscribe();
-  }, [router, queryClient]);
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-    </QueryClientProvider>
   );
 }

@@ -1,45 +1,20 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UtcClock, useFocusTrap } from "@/components/alphabeta/effects";
 import { Terminal } from "@/components/alphabeta/terminal";
 import {
-  Builds,
-  CommitGraph,
+  Events,
+  Faq,
   Footer,
   Hero,
-  HowItWorks,
   Join,
   Manifesto,
-  ManPage,
-  Rotors,
-  RulesCode,
-  Stats,
+  People,
+  Registry,
 } from "@/components/alphabeta/sections";
-import { siteDataQuery } from "@/lib/site-data";
 import { SITE_DESCRIPTION, SITE_TITLE, SITE_URL } from "@/lib/site";
 
-const SITE_DATA_TIMEOUT_MS = 4_000;
-
 export const Route = createFileRoute("/")({
-  // The landing page must render even when Supabase is unreachable: the
-  // numbers and feed simply stay empty and React Query retries on the client.
-  // Letting the loader throw here would turn a stats outage into a 500 for
-  // the whole public site.
-  //
-  // Bounded, too: Railway health-checks this route, so a Supabase call that
-  // hangs would otherwise stall SSR, fail the check and restart the service.
-  loader: async ({ context }) => {
-    try {
-      await Promise.race([
-        context.queryClient.ensureQueryData(siteDataQuery),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("site data timed out")), SITE_DATA_TIMEOUT_MS),
-        ),
-      ]);
-    } catch (error) {
-      console.error(error);
-    }
-  },
   head: () => ({
     meta: [
       { title: SITE_TITLE },
@@ -64,10 +39,10 @@ export const Route = createFileRoute("/")({
 
 const SECTIONS = [
   { id: "manifesto", label: "Manifesto" },
-  { id: "process", label: "Process" },
-  { id: "builds", label: "Builds" },
-  { id: "rules", label: "Rules" },
-  { id: "man", label: "FAQ" },
+  { id: "registry", label: "Registry" },
+  { id: "events", label: "Events" },
+  { id: "people", label: "People" },
+  { id: "faq", label: "FAQ" },
   { id: "join", label: "Join" },
 ];
 
@@ -91,7 +66,6 @@ const BOOT = [
   "handshake established",
 ];
 
-/** Boot overlay: one line every 160ms, then a 400ms fade. */
 const BOOT_STEP_MS = 160;
 const BOOT_FADE_MS = 400;
 
@@ -103,8 +77,6 @@ function Index() {
   const [active, setActive] = useState("");
   const [bootStep, setBootStep] = useState(0);
   const [bootDone, setBootDone] = useState(true);
-  // Rendered as ⌘ on the server and corrected after mount: the platform is
-  // not knowable during SSR, and a mismatch here would be a hydration error.
   const [modKey, setModKey] = useState("⌘");
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -119,17 +91,12 @@ function Index() {
       booted = Boolean(sessionStorage.getItem("ab_booted"));
       if (!booted) sessionStorage.setItem("ab_booted", "1");
     } catch {
-      // Storage can throw in private modes; treat it as already booted so the
-      // overlay never becomes a permanent splash screen.
+      /* private mode — treat as booted so the overlay never sticks */
     }
     if (booted || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     setBootDone(false);
     setBootStep(1);
-
-    // Driven by discrete timeouts rather than one interval: the original
-    // cleared the interval on a wall-clock timeout that did not line up with
-    // the 1.2s CSS fade, so the overlay unmounted mid-fade and blinked out.
     for (let i = 2; i <= BOOT.length; i++) {
       timers.current.push(setTimeout(() => setBootStep(i), BOOT_STEP_MS * (i - 1)));
     }
@@ -138,8 +105,6 @@ function Index() {
     );
   }, []);
 
-  // Every timer this component starts is cleared here, so unmounting mid-boot
-  // does not leave callbacks writing to a dead component.
   useEffect(
     () => () => {
       timers.current.forEach(clearTimeout);
@@ -177,8 +142,6 @@ function Index() {
       } else if (e.key === "Escape") {
         setKeys(false);
       }
-      // Only track the konami sequence outside text fields, so typing "ba"
-      // into the join form cannot trip it.
       if (!typing(e.target)) {
         seq = [...seq, e.key].slice(-KONAMI.length);
         if (seq.join() === KONAMI.join()) setRoot((r) => !r);
@@ -210,11 +173,8 @@ function Index() {
   }, []);
 
   const closeKeys = useCallback(() => setKeys(false), []);
-  // Stable identity matters: Terminal feeds this into its focus trap, whose
-  // effect re-runs — and yanks focus off the input — whenever the callback
-  // changes, which an inline arrow would do on every re-render of this page.
-  const closeTerm = useCallback(() => setTerm(false), []);
   const keysRef = useFocusTrap<HTMLDivElement>(keys, closeKeys);
+  const closeTerm = useCallback(() => setTerm(false), []);
 
   return (
     <div className={`relative min-h-screen overflow-x-hidden ${root ? "root-mode" : ""}`}>
@@ -251,7 +211,7 @@ function Index() {
 
       <nav
         aria-label="Primary"
-        className="glass fixed left-1/2 top-4 z-40 w-[min(960px,92vw)] -translate-x-1/2 rounded-3xl px-5 py-2.5"
+        className="glass fixed left-1/2 top-4 z-40 w-[min(980px,92vw)] -translate-x-1/2 rounded-3xl px-5 py-2.5"
       >
         <div className="flex items-center justify-between">
           <button
@@ -279,15 +239,9 @@ function Index() {
             <span className="hidden sm:inline">
               <UtcClock />
             </span>
-            <Link
-              to="/vault"
-              className="rounded-md border border-glass-border px-2 py-0.5 text-foreground hover:bg-accent"
-            >
-              vault ↗
-            </Link>
             <button
               onClick={() => setTerm(true)}
-              aria-label="Open terminal"
+              aria-label="Open command palette"
               className="rounded-md border border-glass-border px-1.5 py-0.5 hover:text-foreground"
             >
               {modKey}K
@@ -319,14 +273,11 @@ function Index() {
 
       <main>
         <Hero />
-        <Stats />
         <Manifesto />
-        <Rotors />
-        <HowItWorks />
-        <CommitGraph />
-        <Builds />
-        <RulesCode />
-        <ManPage />
+        <Registry />
+        <Events />
+        <People />
+        <Faq />
         <Join />
       </main>
       <Footer />

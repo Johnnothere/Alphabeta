@@ -11,17 +11,7 @@ export const Route = createFileRoute("/robots.txt")({
     handlers: {
       GET: () =>
         new Response(
-          [
-            "User-agent: *",
-            "Allow: /",
-            "",
-            "# Members area and auth pages carry no public content.",
-            "Disallow: /vault",
-            "Disallow: /auth",
-            "",
-            `Sitemap: ${SITE_URL}/sitemap.xml`,
-            "",
-          ].join("\n"),
+          ["User-agent: *", "Allow: /", "", `Sitemap: ${SITE_URL}/sitemap.xml`, ""].join("\n"),
           {
             headers: {
               "content-type": "text/plain; charset=utf-8",

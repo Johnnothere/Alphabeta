@@ -10,30 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as AuthenticatedVaultRouteImport } from './routes/_authenticated/vault'
-import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
-import { Route as AuthenticatedVaultIndexRouteImport } from './routes/_authenticated/vault.index'
-import { Route as AuthenticatedVaultAdminRouteImport } from './routes/_authenticated/vault.admin'
-import { Route as AuthenticatedVaultGalleryRouteImport } from './routes/_authenticated/vault.gallery'
-import { Route as AuthenticatedVaultMeetupRouteImport } from './routes/_authenticated/vault.meetup'
-import { Route as AuthenticatedVaultProjectsRouteImport } from './routes/_authenticated/vault.projects'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
@@ -46,134 +28,35 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedVaultRoute = AuthenticatedVaultRouteImport.update({
-  id: '/vault',
-  path: '/vault',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth_/callback',
-  path: '/auth/callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedVaultIndexRoute = AuthenticatedVaultIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedVaultRoute,
-} as any)
-const AuthenticatedVaultAdminRoute = AuthenticatedVaultAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => AuthenticatedVaultRoute,
-} as any)
-const AuthenticatedVaultGalleryRoute =
-  AuthenticatedVaultGalleryRouteImport.update({
-    id: '/gallery',
-    path: '/gallery',
-    getParentRoute: () => AuthenticatedVaultRoute,
-  } as any)
-const AuthenticatedVaultMeetupRoute =
-  AuthenticatedVaultMeetupRouteImport.update({
-    id: '/meetup',
-    path: '/meetup',
-    getParentRoute: () => AuthenticatedVaultRoute,
-  } as any)
-const AuthenticatedVaultProjectsRoute =
-  AuthenticatedVaultProjectsRouteImport.update({
-    id: '/projects',
-    path: '/projects',
-    getParentRoute: () => AuthenticatedVaultRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/vault': typeof AuthenticatedVaultRouteWithChildren
-  '/auth/callback': typeof AuthCallbackRoute
-  '/vault/admin': typeof AuthenticatedVaultAdminRoute
-  '/vault/gallery': typeof AuthenticatedVaultGalleryRoute
-  '/vault/meetup': typeof AuthenticatedVaultMeetupRoute
-  '/vault/projects': typeof AuthenticatedVaultProjectsRoute
-  '/vault/': typeof AuthenticatedVaultIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/auth/callback': typeof AuthCallbackRoute
-  '/vault/admin': typeof AuthenticatedVaultAdminRoute
-  '/vault/gallery': typeof AuthenticatedVaultGalleryRoute
-  '/vault/meetup': typeof AuthenticatedVaultMeetupRoute
-  '/vault/projects': typeof AuthenticatedVaultProjectsRoute
-  '/vault': typeof AuthenticatedVaultIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/auth': typeof AuthRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/_authenticated/vault': typeof AuthenticatedVaultRouteWithChildren
-  '/auth_/callback': typeof AuthCallbackRoute
-  '/_authenticated/vault/admin': typeof AuthenticatedVaultAdminRoute
-  '/_authenticated/vault/gallery': typeof AuthenticatedVaultGalleryRoute
-  '/_authenticated/vault/meetup': typeof AuthenticatedVaultMeetupRoute
-  '/_authenticated/vault/projects': typeof AuthenticatedVaultProjectsRoute
-  '/_authenticated/vault/': typeof AuthenticatedVaultIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/auth'
-    | '/robots.txt'
-    | '/sitemap.xml'
-    | '/vault'
-    | '/auth/callback'
-    | '/vault/admin'
-    | '/vault/gallery'
-    | '/vault/meetup'
-    | '/vault/projects'
-    | '/vault/'
+  fullPaths: '/' | '/robots.txt' | '/sitemap.xml'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/auth'
-    | '/robots.txt'
-    | '/sitemap.xml'
-    | '/auth/callback'
-    | '/vault/admin'
-    | '/vault/gallery'
-    | '/vault/meetup'
-    | '/vault/projects'
-    | '/vault'
-  id:
-    | '__root__'
-    | '/'
-    | '/_authenticated'
-    | '/auth'
-    | '/robots.txt'
-    | '/sitemap.xml'
-    | '/_authenticated/vault'
-    | '/auth_/callback'
-    | '/_authenticated/vault/admin'
-    | '/_authenticated/vault/gallery'
-    | '/_authenticated/vault/meetup'
-    | '/_authenticated/vault/projects'
-    | '/_authenticated/vault/'
+  to: '/' | '/robots.txt' | '/sitemap.xml'
+  id: '__root__' | '/' | '/robots.txt' | '/sitemap.xml'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  AuthRoute: typeof AuthRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
-  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -183,20 +66,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/robots.txt': {
@@ -213,95 +82,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/vault': {
-      id: '/_authenticated/vault'
-      path: '/vault'
-      fullPath: '/vault'
-      preLoaderRoute: typeof AuthenticatedVaultRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/auth_/callback': {
-      id: '/auth_/callback'
-      path: '/auth/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/vault/': {
-      id: '/_authenticated/vault/'
-      path: '/'
-      fullPath: '/vault/'
-      preLoaderRoute: typeof AuthenticatedVaultIndexRouteImport
-      parentRoute: typeof AuthenticatedVaultRoute
-    }
-    '/_authenticated/vault/admin': {
-      id: '/_authenticated/vault/admin'
-      path: '/admin'
-      fullPath: '/vault/admin'
-      preLoaderRoute: typeof AuthenticatedVaultAdminRouteImport
-      parentRoute: typeof AuthenticatedVaultRoute
-    }
-    '/_authenticated/vault/gallery': {
-      id: '/_authenticated/vault/gallery'
-      path: '/gallery'
-      fullPath: '/vault/gallery'
-      preLoaderRoute: typeof AuthenticatedVaultGalleryRouteImport
-      parentRoute: typeof AuthenticatedVaultRoute
-    }
-    '/_authenticated/vault/meetup': {
-      id: '/_authenticated/vault/meetup'
-      path: '/meetup'
-      fullPath: '/vault/meetup'
-      preLoaderRoute: typeof AuthenticatedVaultMeetupRouteImport
-      parentRoute: typeof AuthenticatedVaultRoute
-    }
-    '/_authenticated/vault/projects': {
-      id: '/_authenticated/vault/projects'
-      path: '/projects'
-      fullPath: '/vault/projects'
-      preLoaderRoute: typeof AuthenticatedVaultProjectsRouteImport
-      parentRoute: typeof AuthenticatedVaultRoute
-    }
   }
 }
 
-interface AuthenticatedVaultRouteChildren {
-  AuthenticatedVaultAdminRoute: typeof AuthenticatedVaultAdminRoute
-  AuthenticatedVaultGalleryRoute: typeof AuthenticatedVaultGalleryRoute
-  AuthenticatedVaultMeetupRoute: typeof AuthenticatedVaultMeetupRoute
-  AuthenticatedVaultProjectsRoute: typeof AuthenticatedVaultProjectsRoute
-  AuthenticatedVaultIndexRoute: typeof AuthenticatedVaultIndexRoute
-}
-
-const AuthenticatedVaultRouteChildren: AuthenticatedVaultRouteChildren = {
-  AuthenticatedVaultAdminRoute: AuthenticatedVaultAdminRoute,
-  AuthenticatedVaultGalleryRoute: AuthenticatedVaultGalleryRoute,
-  AuthenticatedVaultMeetupRoute: AuthenticatedVaultMeetupRoute,
-  AuthenticatedVaultProjectsRoute: AuthenticatedVaultProjectsRoute,
-  AuthenticatedVaultIndexRoute: AuthenticatedVaultIndexRoute,
-}
-
-const AuthenticatedVaultRouteWithChildren =
-  AuthenticatedVaultRoute._addFileChildren(AuthenticatedVaultRouteChildren)
-
-interface AuthenticatedRouteRouteChildren {
-  AuthenticatedVaultRoute: typeof AuthenticatedVaultRouteWithChildren
-}
-
-const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedVaultRoute: AuthenticatedVaultRouteWithChildren,
-}
-
-const AuthenticatedRouteRouteWithChildren =
-  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  AuthRoute: AuthRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
-  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
