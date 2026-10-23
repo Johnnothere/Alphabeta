@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { UtcClock, useFocusTrap } from "@/components/alphabeta/effects";
-import { Terminal } from "@/components/alphabeta/terminal";
+import { UtcClock } from "@/components/alphabeta/effects";
 import {
   Events,
   Faq,
@@ -26,7 +25,7 @@ export const Route = createFileRoute("/")({
       { property: "og:image", content: `${SITE_URL}/og.png` },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
-      { property: "og:image:alt", content: "Build. Ship. Help others ship. — alphabeta" },
+      { property: "og:image:alt", content: "alphabeta — a society of builders" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: SITE_TITLE },
       { name: "twitter:description", content: SITE_DESCRIPTION },
@@ -70,19 +69,12 @@ const BOOT_STEP_MS = 160;
 const BOOT_FADE_MS = 400;
 
 function Index() {
-  const [term, setTerm] = useState(false);
-  const [keys, setKeys] = useState(false);
-  const [root, setRoot] = useState(false);
   const [menu, setMenu] = useState(false);
   const [active, setActive] = useState("");
+  const [root, setRoot] = useState(false);
   const [bootStep, setBootStep] = useState(0);
   const [bootDone, setBootDone] = useState(true);
-  const [modKey, setModKey] = useState("⌘");
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-  useEffect(() => {
-    if (!/Mac|iPhone|iPad|iPod/.test(navigator.platform)) setModKey("Ctrl+");
-  }, []);
 
   // --- boot overlay -------------------------------------------------------
   useEffect(() => {
@@ -113,10 +105,10 @@ function Index() {
     [],
   );
 
-  // --- console greeting, tab title, shortcuts, section observer -----------
+  // --- console greeting, tab title, section observer, hidden konami --------
   useEffect(() => {
     console.log("%calphabeta", "font:700 28px monospace;color:#3f6");
-    console.log("we're looking for builders, not talkers.\ntry: press / and type 'help'");
+    console.log("we're looking for builders, not talkers.");
 
     const original = document.title;
     const onVis = () => {
@@ -124,28 +116,16 @@ function Index() {
     };
     document.addEventListener("visibilitychange", onVis);
 
-    let seq: string[] = [];
     const typing = (t: EventTarget | null) =>
       t instanceof HTMLInputElement ||
       t instanceof HTMLTextAreaElement ||
       (t as HTMLElement)?.isContentEditable;
 
+    let seq: string[] = [];
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setTerm((p) => !p);
-      } else if (e.key === "/" && !typing(e.target)) {
-        e.preventDefault();
-        setTerm(true);
-      } else if (e.key === "?" && !typing(e.target)) {
-        setKeys((k) => !k);
-      } else if (e.key === "Escape") {
-        setKeys(false);
-      }
-      if (!typing(e.target)) {
-        seq = [...seq, e.key].slice(-KONAMI.length);
-        if (seq.join() === KONAMI.join()) setRoot((r) => !r);
-      }
+      if (typing(e.target)) return;
+      seq = [...seq, e.key].slice(-KONAMI.length);
+      if (seq.join() === KONAMI.join()) setRoot((r) => !r);
     };
     window.addEventListener("keydown", onKey);
 
@@ -167,14 +147,9 @@ function Index() {
   }, []);
 
   const go = useCallback((id: string) => {
-    setTerm(false);
     setMenu(false);
     document.getElementById(id)?.scrollIntoView();
   }, []);
-
-  const closeKeys = useCallback(() => setKeys(false), []);
-  const keysRef = useFocusTrap<HTMLDivElement>(keys, closeKeys);
-  const closeTerm = useCallback(() => setTerm(false), []);
 
   return (
     <div className={`relative min-h-screen overflow-x-hidden ${root ? "root-mode" : ""}`}>
@@ -199,15 +174,6 @@ function Index() {
           </div>
         </div>
       )}
-
-      <div
-        aria-hidden
-        className="pointer-events-none fixed left-3 top-0 hidden h-full flex-col justify-around font-mono text-[10px] text-faint lg:flex"
-      >
-        {Array.from({ length: 12 }, (_, i) => (
-          <span key={i}>0x{(i * 256).toString(16).padStart(4, "0")}</span>
-        ))}
-      </div>
 
       <nav
         aria-label="Primary"
@@ -239,13 +205,6 @@ function Index() {
             <span className="hidden sm:inline">
               <UtcClock />
             </span>
-            <button
-              onClick={() => setTerm(true)}
-              aria-label="Open command palette"
-              className="rounded-md border border-glass-border px-1.5 py-0.5 hover:text-foreground"
-            >
-              {modKey}K
-            </button>
             <button
               onClick={() => setMenu((m) => !m)}
               aria-label={menu ? "Close menu" : "Open menu"}
@@ -281,42 +240,6 @@ function Index() {
         <Join />
       </main>
       <Footer />
-
-      {keys && (
-        <div
-          ref={keysRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Keyboard shortcuts"
-          className="glass fixed bottom-6 right-6 z-50 w-64 rounded-2xl p-4 font-mono text-xs"
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-muted-foreground">// keys</p>
-            <button
-              onClick={closeKeys}
-              aria-label="Close shortcuts"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              ✕
-            </button>
-          </div>
-          {(
-            [
-              [`/ or ${modKey}K`, "shell"],
-              ["?", "this panel"],
-              ["esc", "close"],
-              ["↑↑↓↓←→←→ba", "???"],
-            ] as const
-          ).map(([k, v]) => (
-            <p key={k} className="flex justify-between py-0.5">
-              <kbd className="text-signal">{k}</kbd>
-              <span className="text-muted-foreground">{v}</span>
-            </p>
-          ))}
-        </div>
-      )}
-
-      {term && <Terminal sections={SECTIONS} onGoto={go} onClose={closeTerm} />}
     </div>
   );
 }

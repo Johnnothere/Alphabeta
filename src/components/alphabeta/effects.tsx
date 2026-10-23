@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Deliberately excludes the widest glyphs (W, M, @, %, &). The scramble
-// overlay is sized to the *final* text, so wide substitutes make the scrambled
-// string overflow its box — which is what used to push it over the paragraph
-// below. Narrow glyphs keep the overlay close to its reserved width.
-const GLYPHS = "ABCDEFGHIJKLNOPQRSTUVXYZ0123456789#$<>/\\{}[]=+*";
+// Binary scramble: the "enigma" decodes through 0s and 1s before landing on
+// the real text. Narrow glyphs keep the scramble overlay close to the final
+// width so nothing reflows.
+const GLYPHS = "01";
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 export function prefersReducedMotion() {
